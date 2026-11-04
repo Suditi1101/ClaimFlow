@@ -1,0 +1,11 @@
+Django>=5.2,<5.3
+djangorestframework>=3.16,<4
+psycopg[binary]>=3.2,<4
+confluent-kafka>=2.6,<3
+django-storages[s3]>=1.14,<2
+django-redis>=5.4,<8
+django-prometheus>=2.3,<3
+opentelemetry-sdk>=1.30,<2
+opentelemetry-exporter-otlp-proto-http>=1.30,<2
+opentelemetry-instrumentation-django>=0.51b0,<1
+gunicorn>=23,<27

@@ -1,0 +1,20 @@
+@base = http://localhost:8000
+@token = REPLACE_WITH_CUSTOMER_TOKEN
+
+### Submit after uploading a private PDF and replacing UUID
+POST {{base}}/api/claims
+Authorization: Token {{token}}
+Idempotency-Key: sample-claim-001
+Content-Type: application/json
+
+{
+  "policy_reference": "POL-001",
+  "amount": "100.00",
+  "incident_date": "2026-11-01",
+  "description": "Hospital expenses after an accident",
+  "document_ids": ["REPLACE_WITH_DOCUMENT_UUID"]
+}
+
+### List owned claims
+GET {{base}}/api/claims
+Authorization: Token {{token}}

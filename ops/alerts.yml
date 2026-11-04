@@ -1,0 +1,22 @@
+groups:
+- name: claimflow
+  rules:
+  - alert: ClaimFlowWorkerDown
+    expr: up{job=~"workers|outbox"} == 0
+    for: 2m
+    labels:
+      severity: warning
+    annotations:
+      summary: ClaimFlow worker is unavailable
+  - alert: ClaimFlowDeadLetters
+    expr: sum(increase(claimflow_events_total{outcome="dead_letter"}[5m])) > 0
+    labels:
+      severity: warning
+    annotations:
+      summary: ClaimFlow events need operator review
+  - alert: ClaimFlowPublishFailures
+    expr: sum(increase(claimflow_outbox_total{outcome="retry"}[5m])) > 3
+    labels:
+      severity: warning
+    annotations:
+      summary: Outbox publication is failing

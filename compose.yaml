@@ -1,0 +1,248 @@
+name: claimflow
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+    - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"
+      interval: 5s
+      timeout: 3s
+      retries: 20
+  redis:
+    image: redis:7-alpine
+    command:
+    - redis-server
+    - --appendonly
+    - 'yes'
+    volumes:
+    - redis-data:/data
+    healthcheck:
+      test:
+      - CMD
+      - redis-cli
+      - ping
+      interval: 5s
+      timeout: 3s
+      retries: 20
+  kafka:
+    image: apache/kafka:3.9.1
+    environment:
+      KAFKA_NODE_ID: '1'
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: '1'
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: '1'
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: '1'
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'false'
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
+    volumes:
+    - kafka-data:/var/lib/kafka/data
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - /opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list >/dev/null
+      interval: 10s
+      timeout: 10s
+      retries: 20
+  minio:
+    image: minio/minio:RELEASE.2025-04-22T22-12-26Z
+    command:
+    - server
+    - /data
+    - --console-address
+    - :9001
+    environment:
+      MINIO_ROOT_USER: ${S3_ACCESS_KEY}
+      MINIO_ROOT_PASSWORD: ${S3_SECRET_KEY}
+    volumes:
+    - object-data:/data
+    ports:
+    - 127.0.0.1:9001:9001
+  bucket:
+    image: minio/mc:RELEASE.2025-04-16T18-13-26Z
+    env_file:
+    - .env
+    depends_on:
+    - minio
+    entrypoint:
+    - /bin/sh
+    - -c
+    command:
+    - until mc alias set local http://minio:9000 "$S3_ACCESS_KEY" "$S3_SECRET_KEY";
+      do sleep 2; done; mc mb --ignore-existing "local/$S3_BUCKET"
+    restart: on-failure
+  migrate:
+    build: .
+    env_file:
+    - .env
+    command:
+    - python
+    - manage.py
+    - migrate
+    - --noinput
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: 'no'
+  topics:
+    build: .
+    env_file:
+    - .env
+    command:
+    - python
+    - manage.py
+    - create_topics
+    depends_on:
+      kafka:
+        condition: service_healthy
+    restart: 'no'
+  web:
+    build: .
+    env_file: &id001
+    - .env
+    init: true
+    restart: unless-stopped
+    depends_on:
+      migrate: &id002
+        condition: service_completed_successfully
+      topics: &id003
+        condition: service_completed_successfully
+      bucket: &id004
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    stop_grace_period: 45s
+    command:
+    - python
+    - manage.py
+    - runserver
+    - 0.0.0.0:8000
+    - --noreload
+    ports:
+    - 127.0.0.1:8000:8000
+  outbox:
+    build: .
+    env_file: *id001
+    init: true
+    restart: unless-stopped
+    depends_on: &id005
+      migrate: *id002
+      topics: *id003
+      bucket: *id004
+    stop_grace_period: 45s
+    command:
+    - python
+    - manage.py
+    - publish_outbox
+  document:
+    build: .
+    env_file: *id001
+    init: true
+    restart: unless-stopped
+    depends_on: *id005
+    stop_grace_period: 45s
+    command:
+    - python
+    - manage.py
+    - consume_events
+    - document
+  policy:
+    build: .
+    env_file: *id001
+    init: true
+    restart: unless-stopped
+    depends_on: *id005
+    stop_grace_period: 45s
+    command:
+    - python
+    - manage.py
+    - consume_events
+    - policy
+  fraud:
+    build: .
+    env_file: *id001
+    init: true
+    restart: unless-stopped
+    depends_on: *id005
+    stop_grace_period: 45s
+    command:
+    - python
+    - manage.py
+    - consume_events
+    - fraud
+  workflow:
+    build: .
+    env_file: *id001
+    init: true
+    restart: unless-stopped
+    depends_on: *id005
+    stop_grace_period: 45s
+    command:
+    - python
+    - manage.py
+    - consume_events
+    - workflow
+  payment:
+    build: .
+    env_file: *id001
+    init: true
+    restart: unless-stopped
+    depends_on: *id005
+    stop_grace_period: 45s
+    command:
+    - python
+    - manage.py
+    - consume_events
+    - payment
+  notification:
+    build: .
+    env_file: *id001
+    init: true
+    restart: unless-stopped
+    depends_on: *id005
+    stop_grace_period: 45s
+    command:
+    - python
+    - manage.py
+    - consume_events
+    - notification
+  prometheus:
+    image: prom/prometheus:v3.2.1
+    volumes:
+    - ./ops/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    - ./ops/alerts.yml:/etc/prometheus/alerts.yml:ro
+    ports:
+    - 127.0.0.1:9090:9090
+  grafana:
+    image: grafana/grafana:11.6.0
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: 'true'
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+    volumes:
+    - ./ops/grafana/provisioning:/etc/grafana/provisioning:ro
+    - ./ops/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    ports:
+    - 127.0.0.1:3000:3000
+  otel:
+    image: otel/opentelemetry-collector-contrib:0.123.0
+    command:
+    - --config=/etc/otel.yml
+    volumes:
+    - ./ops/otel.yml:/etc/otel.yml:ro
+volumes:
+  postgres-data: {}
+  redis-data: {}
+  kafka-data: {}
+  object-data: {}
