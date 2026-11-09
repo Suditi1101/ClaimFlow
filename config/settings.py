@@ -1,6 +1,7 @@
 import os
 from pathlib import Path
 from django.core.exceptions import ImproperlyConfigured
+from config.database import database_config
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 TESTING = os.getenv("TESTING") == "1"
@@ -53,18 +54,8 @@ TEMPLATES = [
         },
     }
 ]
-DATABASES = {
-    "default": {
-        "ENGINE": "django.db.backends.postgresql",
-        "NAME": os.getenv("POSTGRES_DB", "claimflow"),
-        "USER": os.getenv("POSTGRES_USER", "claimflow"),
-        "PASSWORD": os.getenv("POSTGRES_PASSWORD", ""),
-        "HOST": os.getenv("POSTGRES_HOST", "localhost"),
-        "PORT": os.getenv("POSTGRES_PORT", "5432"),
-        "CONN_MAX_AGE": 60,
-        "OPTIONS": {"connect_timeout": 5},
-    }
-}
+
+DATABASES = {"default": database_config(os.environ)}
 if TESTING and os.getenv("TEST_POSTGRES") != "1":
     DATABASES = {
         "default": {

@@ -8,12 +8,21 @@ def live(request):
 
 
 def ready(request):
+    checks = {"database": "unavailable", "cache": "unavailable"}
     try:
-        with connection.cursor() as c:
-            c.execute("SELECT 1")
-        cache.set("claimflow:ready", 1, 10)
-        if cache.get("claimflow:ready") != 1:
-            raise RuntimeError()
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT 1")
+        checks["database"] = "ready"
     except Exception:
-        return JsonResponse({"status": "unavailable"}, status=503)
-    return JsonResponse({"status": "ready"})
+        pass
+    try:
+        cache.set("claimflow:ready", 1, 10)
+        if cache.get("claimflow:ready") == 1:
+            checks["cache"] = "ready"
+    except Exception:
+        pass
+    available = all(value == "ready" for value in checks.values())
+    return JsonResponse(
+        {"status": "ready" if available else "unavailable", "checks": checks},
+        status=200 if available else 503,
+    )
