@@ -1,9 +1,20 @@
+import uuid
 from django.db import models
 from django.conf import settings
 
 
+def generate_policy_reference():
+    return f"POL-{uuid.uuid4().hex.upper()}"
+
+
 class Policy(models.Model):
-    reference = models.CharField(max_length=60, unique=True)
+    reference = models.CharField(
+        max_length=60,
+        unique=True,
+        default=generate_policy_reference,
+        editable=False,
+        help_text="Generated automatically when the policy is created.",
+    )
     customer = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
     starts_on = models.DateField()
     ends_on = models.DateField()
