@@ -19,6 +19,13 @@ def main():
             [sys.executable, "manage.py", "secure_supabase_tables"], env=env, check=True
         )
 
+    if os.getenv("CLAIM_SUPABASE_URL") and os.getenv("CLAIM_SUPABASE_SERVICE_ROLE_KEY"):
+        subprocess.run(
+            [sys.executable, "manage.py", "ensure_document_storage"],
+            env=env,
+            check=True,
+        )
+
 
 if __name__ == "__main__":
     main()

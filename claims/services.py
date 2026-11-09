@@ -1,6 +1,7 @@
 import hashlib
 import json
 from django.db import transaction
+from django.contrib.auth import get_user_model
 from rest_framework.exceptions import ValidationError, APIException
 from claims.models import Claim, Document, ClaimDocument, ReviewDecision
 from policies.models import Policy
@@ -14,7 +15,7 @@ class Conflict(APIException):
 
 @transaction.atomic
 def submit(customer, data, key):
-    type(customer).objects.select_for_update().get(pk=customer.pk)
+    get_user_model().objects.select_for_update().get(pk=customer.pk)
     digest = hashlib.sha256(
         json.dumps(data, sort_keys=True, default=str).encode()
     ).hexdigest()

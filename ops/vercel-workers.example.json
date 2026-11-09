@@ -1,0 +1,95 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "daemons": {
+    "document": {
+      "root": ".",
+      "entrypoint": "Dockerfile",
+      "command": [
+        "python",
+        "manage.py",
+        "consume_events",
+        "document"
+      ],
+      "instances": {
+        "iad1": 1
+      }
+    },
+    "policy": {
+      "root": ".",
+      "entrypoint": "Dockerfile",
+      "command": [
+        "python",
+        "manage.py",
+        "consume_events",
+        "policy"
+      ],
+      "instances": {
+        "iad1": 1
+      }
+    },
+    "fraud": {
+      "root": ".",
+      "entrypoint": "Dockerfile",
+      "command": [
+        "python",
+        "manage.py",
+        "consume_events",
+        "fraud"
+      ],
+      "instances": {
+        "iad1": 1
+      }
+    },
+    "workflow": {
+      "root": ".",
+      "entrypoint": "Dockerfile",
+      "command": [
+        "python",
+        "manage.py",
+        "consume_events",
+        "workflow"
+      ],
+      "instances": {
+        "iad1": 1
+      }
+    },
+    "payment": {
+      "root": ".",
+      "entrypoint": "Dockerfile",
+      "command": [
+        "python",
+        "manage.py",
+        "consume_events",
+        "payment"
+      ],
+      "instances": {
+        "iad1": 1
+      }
+    },
+    "notification": {
+      "root": ".",
+      "entrypoint": "Dockerfile",
+      "command": [
+        "python",
+        "manage.py",
+        "consume_events",
+        "notification"
+      ],
+      "instances": {
+        "iad1": 1
+      }
+    },
+    "outbox": {
+      "root": ".",
+      "entrypoint": "Dockerfile",
+      "command": [
+        "python",
+        "manage.py",
+        "publish_outbox"
+      ],
+      "instances": {
+        "iad1": 1
+      }
+    }
+  }
+}

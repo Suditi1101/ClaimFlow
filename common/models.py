@@ -48,3 +48,8 @@ class DeadLetter(models.Model):
                 name="unique_failed_delivery",
             )
         ]
+
+
+class OwnerSetup(models.Model):
+    id = models.PositiveSmallIntegerField(primary_key=True, default=1)
+    completed_at = models.DateTimeField(null=True)

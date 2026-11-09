@@ -2,6 +2,9 @@ import hashlib
 import uuid
 from decimal import Decimal
 from django.http import FileResponse
+from django.conf import settings
+from common.storage import StorageUnavailable
+from rest_framework.exceptions import APIException
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework import serializers, viewsets
@@ -86,8 +89,8 @@ class DocumentViewSet(viewsets.ViewSet):
 
     def create(self, request):
         file = request.FILES.get("file")
-        if not file or file.size > 10 * 1024 * 1024:
-            raise ValidationError("Provide a PDF up to 10 MiB.")
+        if not file or file.size > settings.MAX_DOCUMENT_BYTES:
+            raise ValidationError("Provide a PDF within the upload size limit.")
         head = file.read(5)
         file.seek(0)
         if head != b"%PDF-":
@@ -97,9 +100,14 @@ class DocumentViewSet(viewsets.ViewSet):
             digest.update(chunk)
         file.seek(0)
         file.name = f"{uuid.uuid4()}.pdf"
-        doc = Document.objects.create(
-            owner=request.user, file=file, sha256=digest.hexdigest(), size=file.size
-        )
+        try:
+            doc = Document.objects.create(
+                owner=request.user, file=file, sha256=digest.hexdigest(), size=file.size
+            )
+        except StorageUnavailable:
+            error = APIException("Document storage is temporarily unavailable.")
+            error.status_code = 503
+            raise error from None
         return Response(
             {"id": str(doc.pk), "sha256": doc.sha256, "size": doc.size}, status=201
         )

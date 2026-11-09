@@ -145,3 +145,15 @@ FILE_UPLOAD_HANDLERS = [
     "django.core.files.uploadhandler.MemoryFileUploadHandler",
     "django.core.files.uploadhandler.TemporaryFileUploadHandler",
 ]
+
+LOGIN_URL = "/accounts/login/"
+LOGIN_REDIRECT_URL = "/accounts/"
+LOGOUT_REDIRECT_URL = "/accounts/login/"
+MAX_DOCUMENT_BYTES = 4 * 1024 * 1024 if os.getenv("VERCEL") else 10 * 1024 * 1024
+SUPABASE_STORAGE_URL = os.getenv("CLAIM_SUPABASE_URL", "")
+SUPABASE_STORAGE_KEY = os.getenv("CLAIM_SUPABASE_SERVICE_ROLE_KEY", "")
+SUPABASE_STORAGE_BUCKET = "claimflow-documents"
+if not TESTING and SUPABASE_STORAGE_URL and SUPABASE_STORAGE_KEY:
+    STORAGES["default"] = {"BACKEND": "common.storage.SupabaseStorage"}
+OWNER_SETUP_HASH = os.getenv("CLAIMFLOW_OWNER_SETUP_HASH", "")
+OWNER_SETUP_EXPIRES = int(os.getenv("CLAIMFLOW_OWNER_SETUP_EXPIRES", "0"))

@@ -1,5 +1,6 @@
 """Bound total file bytes before Django spools an untrusted upload to disk."""
 
+from django.conf import settings
 from django.core.files.uploadhandler import FileUploadHandler, StopUpload
 
 
@@ -10,7 +11,7 @@ class MaxBytesUploadHandler(FileUploadHandler):
 
     def receive_data_chunk(self, raw_data, start):
         self.received += len(raw_data)
-        if self.received > 10 * 1024 * 1024:
+        if self.received > settings.MAX_DOCUMENT_BYTES:
             raise StopUpload(connection_reset=True)
         return raw_data
 
