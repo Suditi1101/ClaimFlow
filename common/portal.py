@@ -117,6 +117,33 @@ def setup_owner(request):
     )
 
 
+def validate_pdf(file):
+    if file.size > settings.MAX_DOCUMENT_BYTES or file.read(5) != b"%PDF-":
+        raise forms.ValidationError("Upload a PDF within the size limit.")
+    file.seek(0)
+    return file
+
+
+class MultipleFileInput(forms.ClearableFileInput):
+    allow_multiple_selected = True
+
+
+class MultipleFileField(forms.FileField):
+    def __init__(self, **kwargs):
+        super().__init__(
+            widget=MultipleFileInput(attrs={"accept": "application/pdf"}), **kwargs
+        )
+
+    def clean(self, data, initial=None):
+        files = data if isinstance(data, (list, tuple)) else ([data] if data else [])
+        if len(files) > 9:
+            raise forms.ValidationError("Upload at most nine supporting documents.")
+        return [
+            validate_pdf(super(MultipleFileField, self).clean(file, initial))
+            for file in files
+        ]
+
+
 class ClaimForm(forms.Form):
     policy = forms.ModelChoiceField(queryset=Policy.objects.none())
     amount = forms.DecimalField(
@@ -124,7 +151,15 @@ class ClaimForm(forms.Form):
     )
     incident_date = forms.DateField(widget=forms.DateInput(attrs={"type": "date"}))
     description = forms.CharField(min_length=10, max_length=4000, widget=forms.Textarea)
-    document = forms.FileField(help_text="PDF only, maximum 4 MiB on Vercel.")
+    document = forms.FileField(
+        label="Claim document",
+        widget=forms.ClearableFileInput(attrs={"accept": "application/pdf"}),
+        help_text="Required PDF. Total upload limit: 4 MiB on Vercel, 10 MiB locally.",
+    )
+    supporting_documents = MultipleFileField(
+        required=False,
+        help_text="Select up to nine supporting PDFs, such as receipts, prescriptions, and reports.",
+    )
     request_key = forms.UUIDField(widget=forms.HiddenInput)
 
     def __init__(self, *args, customer, **kwargs):
@@ -132,11 +167,18 @@ class ClaimForm(forms.Form):
         self.fields["policy"].queryset = Policy.objects.filter(customer=customer)
 
     def clean_document(self):
-        file = self.cleaned_data["document"]
-        if file.size > settings.MAX_DOCUMENT_BYTES or file.read(5) != b"%PDF-":
-            raise forms.ValidationError("Upload a PDF within the size limit.")
-        file.seek(0)
-        return file
+        return validate_pdf(self.cleaned_data["document"])
+
+    def clean(self):
+        data = super().clean()
+        files = ([data["document"]] if data.get("document") else []) + data.get(
+            "supporting_documents", []
+        )
+        if sum(file.size for file in files) > settings.MAX_DOCUMENT_BYTES:
+            raise forms.ValidationError(
+                "The combined documents exceed the total upload size limit."
+            )
+        return data
 
     def clean_incident_date(self):
         value = self.cleaned_data["incident_date"]
@@ -155,17 +197,26 @@ def dashboard(request):
         customer=request.user,
         initial={"request_key": uuid.uuid4()},
     )
+    if getattr(request, "document_upload_limit_exceeded", False):
+        form.add_error(
+            None, "The combined documents exceed the total upload size limit."
+        )
     if request.method == "POST":
         if limited(request, "claim:" + str(request.user.pk), 20):
             return HttpResponse("Too many submissions.", status=429)
         if form.is_valid():
-            file = form.cleaned_data["document"]
-            digest = hashlib.sha256()
-            for chunk in file.chunks():
-                digest.update(chunk)
-            file.seek(0)
+            files = [form.cleaned_data["document"]] + form.cleaned_data[
+                "supporting_documents"
+            ]
+            digests = []
+            for file in files:
+                digest = hashlib.sha256()
+                for chunk in file.chunks():
+                    digest.update(chunk)
+                file.seek(0)
+                digests.append(digest.hexdigest())
             key = str(form.cleaned_data["request_key"])
-            saved_name = None
+            saved_names = []
             try:
                 with transaction.atomic():
                     get_user_model().objects.select_for_update().get(pk=request.user.pk)
@@ -173,28 +224,33 @@ def dashboard(request):
                         customer=request.user, idempotency_key=key
                     ).first()
                     if existing:
-                        docs = list(
-                            existing.document_links.values_list(
-                                "document_id", flat=True
+                        links = list(
+                            existing.document_links.select_related("document").order_by(
+                                "pk"
                             )
                         )
-                        link = existing.document_links.select_related(
-                            "document"
-                        ).first()
-                        if not link or link.document.sha256 != digest.hexdigest():
+                        if [
+                            (link.category, link.document.sha256) for link in links
+                        ] != [
+                            ("claim" if index == 0 else "supporting", digest)
+                            for index, digest in enumerate(digests)
+                        ]:
                             raise forms.ValidationError(
-                                "This request key was used with a different document."
+                                "This request key was used with different documents."
                             )
+                        docs = [link.document_id for link in links]
                     else:
-                        file.name = uuid.uuid4().hex + ".pdf"
-                        doc = Document.objects.create(
-                            owner=request.user,
-                            file=file,
-                            sha256=digest.hexdigest(),
-                            size=file.size,
-                        )
-                        saved_name = doc.file.name
-                        docs = [doc.pk]
+                        docs = []
+                        for file, digest in zip(files, digests):
+                            file.name = uuid.uuid4().hex + ".pdf"
+                            doc = Document.objects.create(
+                                owner=request.user,
+                                file=file,
+                                sha256=digest,
+                                size=file.size,
+                            )
+                            saved_names.append(doc.file.name)
+                            docs.append(doc.pk)
                     data = ClaimInput(
                         data={
                             "policy_reference": form.cleaned_data["policy"].reference,
@@ -202,32 +258,36 @@ def dashboard(request):
                             "incident_date": form.cleaned_data["incident_date"],
                             "description": form.cleaned_data["description"],
                             "document_ids": docs,
+                            "supporting_document_ids": docs[1:],
                         }
                     )
                     data.is_valid(raise_exception=True)
                     submit(request.user, data.validated_data, key)
                 return redirect("portal")
-            except (APIException, forms.ValidationError) as exc:
-                if saved_name:
-                    from django.core.files.storage import default_storage
+            except (APIException, forms.ValidationError, StorageUnavailable) as exc:
+                from django.core.files.storage import default_storage
 
+                for saved_name in saved_names:
                     try:
                         default_storage.delete(saved_name)
-                    except OSError:
+                    except (OSError, StorageUnavailable):
                         pass
-                form.add_error(None, str(getattr(exc, "detail", exc)))
-            except StorageUnavailable:
-                form.add_error(
-                    None,
-                    "Document storage is temporarily unavailable. Please try again.",
-                )
+                if isinstance(exc, StorageUnavailable):
+                    form.add_error(
+                        None,
+                        "Document storage is temporarily unavailable. Please try again.",
+                    )
+                else:
+                    form.add_error(None, str(getattr(exc, "detail", exc)))
     return render(
         request,
         "portal/dashboard.html",
         {
             "form": form,
             "claims": Claim.objects.filter(customer=request.user)
-            .prefetch_related("checks")
+            .prefetch_related(
+                "checks", "reviewdecision_set", "document_links__document"
+            )
             .order_by("-created_at")[:50],
             "policies": Policy.objects.filter(customer=request.user),
         },

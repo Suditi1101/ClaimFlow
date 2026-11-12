@@ -126,3 +126,7 @@ See `VERIFICATION.md` for checks actually executed in the build environment and 
 Architecture decision: begin with one database and modular Django code, because claim transitions and outbox consistency benefit from local transactions. Keep independent worker deployments for differing processing load. Extract a service when operational ownership, isolation or independent persistence requirements justify the added network consistency costs.
 
 Primary references: [Django transactions](https://docs.djangoproject.com/en/5.2/topics/db/transactions/) and [Confluent Python client](https://docs.confluent.io/kafka-clients/python/current/overview.html).
+
+## RAG claim verification
+
+See [RAG setup and limitations](docs/RAG.md) for policy ingestion, Docker configuration, cited findings, and manual-review behavior.

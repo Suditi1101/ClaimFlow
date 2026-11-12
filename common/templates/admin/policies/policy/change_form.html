@@ -1,0 +1,19 @@
+{% extends "admin/change_form.html" %}
+{% block after_related_objects %}
+{{ block.super }}
+{% if original %}
+<div class="module">
+<h2>Policy Documents</h2>
+{% if has_change_permission %}
+<p><a class="button" href="{% url 'admin:policies_policy_upload_document' original.pk %}">Upload and Index policy PDF</a></p>
+<p>Upload insurer-approved policy wording. Indexing runs in the background; refresh to see progress.</p>
+<table><thead><tr><th>Title</th><th>Version</th><th>Effective dates</th><th>Status</th><th>Details</th><th>Actions</th></tr></thead><tbody>
+{% for document in original.documents.all %}
+<tr><td>{{ document.title }}</td><td>{{ document.version }}</td><td>{{ document.effective_from }} — {{ document.effective_to }}</td><td>{{ document.get_status_display }}</td><td>{{ document.indexing_message }}{% if document.error_code %}<br>Code: {{ document.error_code }}{% endif %}</td>
+<td><a href="{% url 'admin:policies_policy_document_download' original.pk document.pk %}">Download PDF</a>{% if document.status == 'failed' or document.needs_reindex %} · <a href="{% url 'admin:policies_policy_document_retry' original.pk document.pk %}">{% if document.needs_reindex %}Re-index with current model{% else %}Retry indexing{% endif %}</a>{% endif %}</td></tr>
+{% empty %}<tr><td colspan="6">No policy documents uploaded yet.</td></tr>{% endfor %}
+</tbody></table>
+{% else %}<p>Policy change permission is required to manage policy documents.</p>{% endif %}
+</div>
+{% endif %}
+{% endblock %}

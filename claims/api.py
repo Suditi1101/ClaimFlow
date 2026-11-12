@@ -25,6 +25,22 @@ class ClaimInput(serializers.Serializer):
         child=serializers.UUIDField(), min_length=1, max_length=10
     )
 
+    supporting_document_ids = serializers.ListField(
+        child=serializers.UUIDField(), max_length=9, required=False
+    )
+
+    def validate(self, attrs):
+        supporting = attrs.get("supporting_document_ids", [])
+        if len(set(supporting)) != len(supporting) or not set(supporting).issubset(
+            attrs["document_ids"]
+        ):
+            raise serializers.ValidationError(
+                "Supporting documents must be unique and included in document_ids."
+            )
+        if supporting and len(set(attrs["document_ids"]) - set(supporting)) != 1:
+            raise serializers.ValidationError("Provide exactly one claim document.")
+        return attrs
+
     def validate_incident_date(self, v):
         if v > timezone.localdate():
             raise serializers.ValidationError("Future incident date.")
@@ -38,6 +54,22 @@ class ClaimInput(serializers.Serializer):
 
 class ClaimOutput(serializers.ModelSerializer):
     checks = serializers.SerializerMethodField()
+    rejection_reasons = serializers.ReadOnlyField()
+    rag_verification = serializers.SerializerMethodField()
+
+    def get_rag_verification(self, obj):
+        from verification.models import ClaimAssessment
+
+        try:
+            assessment = obj.rag_assessment
+        except ClaimAssessment.DoesNotExist:
+            return None
+        # Raw medical text and internal error details stay in the staff portal.
+        return {
+            "status": assessment.status,
+            "staff_review_required": True,
+            "created_at": assessment.created_at,
+        }
 
     def get_checks(self, obj):
         return list(obj.checks.values("kind", "outcome", "reason"))
@@ -53,6 +85,8 @@ class ClaimOutput(serializers.ModelSerializer):
             "status",
             "created_at",
             "checks",
+            "rejection_reasons",
+            "rag_verification",
         ]
 
 
@@ -63,7 +97,8 @@ class ClaimViewSet(viewsets.ReadOnlyModelViewSet):
     def get_queryset(self):
         return (
             Claim.objects.filter(customer=self.request.user)
-            .prefetch_related("checks")
+            .select_related("rag_assessment")
+            .prefetch_related("checks", "reviewdecision_set")
             .order_by("-created_at")
         )
 

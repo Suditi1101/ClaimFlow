@@ -1,5 +1,10 @@
 name: claimflow
 services:
+  qdrant:
+    image: qdrant/qdrant:v1.15.1
+    volumes:
+    - qdrant-data:/qdrant/storage
+    restart: unless-stopped
   postgres:
     image: postgres:16-alpine
     environment:
@@ -57,32 +62,42 @@ services:
       timeout: 10s
       retries: 20
   minio:
-    image: minio/minio:RELEASE.2025-04-22T22-12-26Z
-    command:
-    - server
-    - /data
-    - --console-address
-    - :9001
-    environment:
-      MINIO_ROOT_USER: ${S3_ACCESS_KEY}
-      MINIO_ROOT_PASSWORD: ${S3_SECRET_KEY}
-    volumes:
-    - object-data:/data
-    ports:
-    - 127.0.0.1:9001:9001
+    image: motoserver/moto:5.2.3
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://localhost:5000/')"
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
   bucket:
-    image: minio/mc:RELEASE.2025-04-16T18-13-26Z
+    build: .
     env_file:
-    - .env
+      - .env
     depends_on:
-    - minio
-    entrypoint:
-    - /bin/sh
-    - -c
+      minio:
+        condition: service_healthy
+    entrypoint: ["python", "-c"]
     command:
-    - until mc alias set local http://minio:9000 "$S3_ACCESS_KEY" "$S3_SECRET_KEY";
-      do sleep 2; done; mc mb --ignore-existing "local/$S3_BUCKET"
-    restart: on-failure
+      - |
+        import os
+        import boto3
+        s3 = boto3.client(
+            "s3",
+            endpoint_url=os.environ["S3_ENDPOINT"],
+            aws_access_key_id=os.environ["S3_ACCESS_KEY"],
+            aws_secret_access_key=os.environ["S3_SECRET_KEY"],
+            region_name="us-east-1",
+        )
+        bucket = os.environ["S3_BUCKET"]
+        existing = {b["Name"] for b in s3.list_buckets()["Buckets"]}
+        if bucket not in existing:
+            s3.create_bucket(Bucket=bucket)
+        print("Storage bucket ready:", bucket)
+    restart: "no"
   migrate:
     build: .
     env_file:
@@ -132,6 +147,18 @@ services:
     - --noreload
     ports:
     - 127.0.0.1:8000:8000
+  policy-indexer:
+    build: .
+    env_file: *id001
+    init: true
+    restart: unless-stopped
+    depends_on:
+      migrate: *id002
+      bucket: *id004
+      qdrant:
+        condition: service_started
+    stop_grace_period: 45s
+    command: ["python", "manage.py", "index_policy_documents"]
   outbox:
     build: .
     env_file: *id001
@@ -242,6 +269,7 @@ services:
     volumes:
     - ./ops/otel.yml:/etc/otel.yml:ro
 volumes:
+  qdrant-data: {}
   postgres-data: {}
   redis-data: {}
   kafka-data: {}

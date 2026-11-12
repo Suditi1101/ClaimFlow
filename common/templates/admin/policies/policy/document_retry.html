@@ -1,0 +1,10 @@
+{% extends "admin/base_site.html" %}
+{% block content %}
+<h1>{{ title }}</h1>
+<p>{{ document.title }} — {{ document.version }}</p>
+{% if document.status == 'failed' or document.needs_reindex %}
+<p>{{ document.indexing_message }} ({{ document.error_code }})</p>
+<form method="post">{% csrf_token %}<input type="submit" value="Retry indexing"></form>
+{% else %}<p>Only failed documents or documents with changed embedding configuration can be re-indexed.</p>{% endif %}
+<a href="{% url 'admin:policies_policy_change' policy.pk %}">Back to policy</a>
+{% endblock %}

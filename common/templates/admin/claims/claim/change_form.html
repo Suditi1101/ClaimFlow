@@ -1,0 +1,24 @@
+{% extends "admin/change_form.html" %}
+{% block object-tools-items %}
+{{ block.super }}
+{% if has_change_permission %}{% if original.status == 'submitted' or original.status == 'manual_review' %}
+<li><a href="{{ decision_url }}">Approve</a></li>
+<li><a href="{{ decision_url }}">Reject</a></li>
+{% endif %}{% endif %}
+{% endblock %}
+{% block after_related_objects %}
+{{ block.super }}
+{% if has_change_permission %}
+<h2>RAG document verification</h2>
+{% if original.rag_assessment %}
+<p><strong>Advisory findings — staff decision required.</strong> {{ original.rag_assessment.status }}</p>
+<p>{{ original.rag_assessment.summary|linebreaksbr }}</p>
+{% if original.rag_assessment.error_code %}<p>Manual review code: {{ original.rag_assessment.error_code }}</p>{% endif %}
+{% for finding in original.rag_assessment.findings %}<p><strong>{{ finding.outcome }}</strong>: {{ finding.explanation }}<br>Policy references: {{ finding.policy_ids|join:", " }}<br>Document references: {{ finding.evidence_ids|join:", " }}</p>{% endfor %}
+<details><summary>Retrieved policy evidence</summary>{% for source in original.rag_assessment.policy_sources %}<p><strong>{{ source.title }} — {{ source.version }}, page {{ source.page }}</strong><br>Reference: {{ source.id }}<br>{{ source.text|linebreaksbr }}</p>{% endfor %}</details>
+<details><summary>Claim document evidence</summary>{% for page in original.rag_assessment.evidence %}<p><a href="/api/documents/{{ page.document_id }}">{{ page.category }} document</a> — page {{ page.page }}<br>Reference: {{ page.id }}<br>{{ page.text|linebreaksbr }}</p>{% endfor %}</details>
+{% else %}<p>No RAG assessment recorded.</p>{% endif %}
+{% endif %}
+<h2>Decision history</h2>
+{% for decision in original.reviewdecision_set.all %}<p>{{ decision.created_at }} · {{ decision.reviewer }} · {{ decision.decision }}<br>{{ decision.reason|linebreaksbr }}</p>{% empty %}<p>No manual decision recorded.</p>{% endfor %}
+{% endblock %}

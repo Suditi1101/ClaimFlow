@@ -1,5 +1,6 @@
+from django.utils import timezone
 import uuid
-from datetime import date, timedelta
+from datetime import timedelta
 from decimal import Decimal
 from unittest.mock import patch
 import pytest
@@ -37,8 +38,8 @@ def policy(user):
     return Policy.objects.create(
         reference="POL-001",
         customer=user,
-        starts_on=date.today() - timedelta(days=365),
-        ends_on=date.today() + timedelta(days=365),
+        starts_on=timezone.localdate() - timedelta(days=365),
+        ends_on=timezone.localdate() + timedelta(days=365),
         coverage_limit=Decimal("10000"),
     )
 
@@ -58,7 +59,7 @@ def data(policy, doc):
     return {
         "policy_reference": policy.reference,
         "amount": Decimal("100.00"),
-        "incident_date": date.today(),
+        "incident_date": timezone.localdate(),
         "description": "Hospital expenses after accident",
         "document_ids": [doc.pk],
     }
@@ -171,7 +172,7 @@ def test_negative_and_future_invalid(client, data):
     payload = {
         **data,
         "amount": "-1",
-        "incident_date": str(date.today() + timedelta(days=1)),
+        "incident_date": str(timezone.localdate() + timedelta(days=1)),
         "document_ids": [str(data["document_ids"][0])],
     }
     res = client.post(
@@ -349,7 +350,7 @@ def test_db_constraint(user, policy):
             customer=user,
             policy=policy,
             amount=-1,
-            incident_date=date.today(),
+            incident_date=timezone.localdate(),
             description="invalid",
             idempotency_key="x",
             request_hash="x",

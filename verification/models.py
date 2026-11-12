@@ -7,9 +7,12 @@ class CheckResult(models.Model):
     )
     kind = models.CharField(max_length=20)
     outcome = models.CharField(max_length=20)
-    reason = models.CharField(max_length=200)
+    reason = models.TextField(max_length=2000)
 
     class Meta:
         constraints = [
             models.UniqueConstraint(fields=["claim", "kind"], name="unique_claim_check")
         ]
+
+
+from verification.rag_models import PolicyKnowledge, PolicyChunk, ClaimAssessment  # noqa: F401,E402
