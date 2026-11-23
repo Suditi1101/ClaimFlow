@@ -1,4 +1,5 @@
-from datetime import date, timedelta
+from django.utils import timezone
+from datetime import timedelta
 import pytest
 from django.contrib.admin.sites import AdminSite
 from django.contrib.auth import get_user_model
@@ -12,8 +13,8 @@ def test_policy_reference_generated_and_stable():
     customer = get_user_model().objects.create_user("policy-customer")
     data = dict(
         customer=customer,
-        starts_on=date.today(),
-        ends_on=date.today() + timedelta(days=365),
+        starts_on=timezone.localdate(),
+        ends_on=timezone.localdate() + timedelta(days=365),
         coverage_limit=1000,
     )
     first = Policy.objects.create(**data)

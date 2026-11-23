@@ -25,6 +25,24 @@ class Claim(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    @property
+    def rejection_reasons(self):
+        if self.status != self.Status.REJECTED:
+            return []
+        decisions = sorted(
+            self.reviewdecision_set.all(),
+            key=lambda item: item.created_at,
+            reverse=True,
+        )
+        if decisions and decisions[0].decision == self.Status.REJECTED:
+            return [decisions[0].reason]
+        reasons = [
+            check.reason for check in self.checks.all() if check.outcome == "fail"
+        ]
+        return reasons or [
+            "Please contact your insurer for the detailed reason for this decision."
+        ]
+
     class Meta:
         constraints = [
             models.UniqueConstraint(
@@ -49,6 +67,11 @@ class ClaimDocument(models.Model):
         Claim, on_delete=models.CASCADE, related_name="document_links"
     )
     document = models.OneToOneField(Document, on_delete=models.PROTECT)
+    category = models.CharField(
+        max_length=20,
+        choices=[("claim", "Claim document"), ("supporting", "Supporting document")],
+        default="claim",
+    )
 
 
 class ReviewDecision(models.Model):

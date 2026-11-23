@@ -6,6 +6,7 @@ from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from claims.api import ClaimViewSet, DocumentViewSet
 from common.health import live, ready
+from common.chat import chat
 
 router = DefaultRouter(trailing_slash=False)
 router.register("claims", ClaimViewSet, basename="claim")
@@ -13,6 +14,7 @@ router.register("documents", DocumentViewSet, basename="document")
 urlpatterns = [
     path("", RedirectView.as_view(url="/accounts/", permanent=False), name="home"),
     path("accounts/", dashboard, name="portal"),
+    path("accounts/chat/", chat, name="customer-chat"),
     path("accounts/login/", PortalLoginView.as_view(), name="login"),
     path("accounts/logout/", LogoutView.as_view(), name="logout"),
     path("accounts/signup/", signup, name="signup"),

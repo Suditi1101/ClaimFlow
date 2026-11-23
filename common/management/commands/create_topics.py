@@ -9,7 +9,8 @@ class Command(BaseCommand):
         p.add_argument("--replication-factor", type=int, default=1)
 
     def handle(self, *args, **o):
-        futures = AdminClient(settings.KAFKA).create_topics(
+        admin = AdminClient(settings.KAFKA)
+        futures = admin.create_topics(
             [
                 NewTopic(
                     t, num_partitions=6, replication_factor=o["replication_factor"]

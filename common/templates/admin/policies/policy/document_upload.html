@@ -1,0 +1,9 @@
+{% extends "admin/base_site.html" %}
+{% block content %}
+<h1>{{ title }}</h1><p>Policy: <a href="{% url 'admin:policies_policy_change' policy.pk %}">{{ policy.reference }}</a></p>
+<p>Upload approved insurer policy wording. Claim documents belong in the customer claim form.</p>
+<form method="post" enctype="multipart/form-data">{% csrf_token %}{{ form.as_p }}
+<input type="submit" value="Upload and Index">
+<a href="{% url 'admin:policies_policy_change' policy.pk %}">Cancel</a>
+</form>
+{% endblock %}

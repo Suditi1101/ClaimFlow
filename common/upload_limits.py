@@ -12,6 +12,8 @@ class MaxBytesUploadHandler(FileUploadHandler):
     def receive_data_chunk(self, raw_data, start):
         self.received += len(raw_data)
         if self.received > settings.MAX_DOCUMENT_BYTES:
+            if self.request is not None:
+                self.request.document_upload_limit_exceeded = True
             raise StopUpload(connection_reset=True)
         return raw_data
 

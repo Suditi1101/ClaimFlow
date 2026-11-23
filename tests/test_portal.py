@@ -1,7 +1,8 @@
+from django.utils import timezone
 import hashlib
 import time
 import uuid
-from datetime import date, timedelta
+from datetime import timedelta
 from unittest.mock import Mock, patch
 import pytest
 from django.contrib.auth import get_user_model
@@ -134,7 +135,7 @@ def claim_payload(policy, key):
     return {
         "policy": policy.pk,
         "amount": "100.00",
-        "incident_date": date.today().isoformat(),
+        "incident_date": timezone.localdate().isoformat(),
         "description": "Synthetic hospital claim receipt",
         "request_key": key,
         "document": SimpleUploadedFile("demo.pdf", b"%PDF-1.4 synthetic"),
@@ -147,8 +148,8 @@ def test_customer_claim_portal_is_owned_and_idempotent():
     p = Policy.objects.create(
         reference="P1",
         customer=u,
-        starts_on=date.today() - timedelta(days=1),
-        ends_on=date.today() + timedelta(days=100),
+        starts_on=timezone.localdate() - timedelta(days=1),
+        ends_on=timezone.localdate() + timedelta(days=100),
         coverage_limit=1000,
     )
     c = Client()

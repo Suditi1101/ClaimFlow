@@ -157,3 +157,15 @@ if not TESTING and SUPABASE_STORAGE_URL and SUPABASE_STORAGE_KEY:
     STORAGES["default"] = {"BACKEND": "common.storage.SupabaseStorage"}
 OWNER_SETUP_HASH = os.getenv("CLAIMFLOW_OWNER_SETUP_HASH", "")
 OWNER_SETUP_EXPIRES = int(os.getenv("CLAIMFLOW_OWNER_SETUP_EXPIRES", "0"))
+
+# Opt-in: claim evidence is sent to Groq, and retrieval queries to Gemini, when RAG_ENABLED=true.
+CLAIM_RAG = {
+    "enabled": os.getenv("RAG_ENABLED", "false").lower() == "true",
+    "groq_api_key": os.getenv("GROQ_API_KEY", ""),
+    "gemini_api_key": os.getenv("GEMINI_API_KEY", ""),
+    "chat_model": os.getenv("RAG_CHAT_MODEL", "openai/gpt-oss-120b"),
+    "embedding_model": os.getenv("RAG_EMBEDDING_MODEL", "gemini-embedding-001"),
+    "qdrant_url": os.getenv("QDRANT_URL", "http://qdrant:6333"),
+    "qdrant_key": os.getenv("QDRANT_API_KEY", ""),
+    "collection": os.getenv("RAG_COLLECTION", "claimflow_gemini_policy_v1"),
+}

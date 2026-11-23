@@ -6,3 +6,29 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 staticfiles/
+# Other environment files; keep the safe example
+.env.*
+!.env.example
+
+# Other virtual environments
+venv/
+
+# Generated Python files
+*.pyo
+*.pyd
+
+# Temporary test dependencies
+.test-deps/
+
+# Database temporary files
+*.sqlite3-journal
+*.sqlite3-wal
+*.sqlite3-shm
+
+# Test coverage and logs
+.coverage
+htmlcov/
+*.log
+
+# Local uploaded documents
+media/

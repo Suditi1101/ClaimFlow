@@ -12,7 +12,18 @@ def run_check(claim, kind):
             and claim.amount <= p.coverage_limit
         )
         outcome = "pass" if ok else "fail"
-        reason = "Policy coverage check"
+        failures = []
+        if not p.active:
+            failures.append("Your policy is inactive.")
+        if not p.starts_on <= claim.incident_date <= p.ends_on:
+            failures.append(
+                f"The incident date is outside your policy coverage period ({p.starts_on} to {p.ends_on})."
+            )
+        if claim.amount > p.coverage_limit:
+            failures.append(
+                f"The claimed amount ({claim.amount}) exceeds your policy coverage limit ({p.coverage_limit})."
+            )
+        reason = " ".join(failures) if failures else "Policy coverage check passed."
     elif kind == "document":
         outcome = "pass" if claim.document_links.exists() else "review"
         reason = "Demo document presence check"

@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.db import transaction
 from claims.models import Claim
 from common.models import ProcessedEvent
@@ -24,11 +25,23 @@ def process(role, event):
         return
     if role == "payment":
         settle(event["claim_id"])
+    rag_document = role == "document" and settings.CLAIM_RAG["enabled"]
+    if rag_document:
+        if ProcessedEvent.objects.filter(event_id=event["id"], consumer=role).exists():
+            return
+        from verification.rag import verify_claim
+        from verification.rag_clients import RagError
+
+        try:
+            verify_claim(event["claim_id"])
+        except RagError as exc:
+            if str(exc) != "claim_already_finalized":
+                raise
     with transaction.atomic():
         claim = Claim.objects.select_for_update().get(pk=event["claim_id"])
         if ProcessedEvent.objects.filter(event_id=event["id"], consumer=role).exists():
             return
-        if role in {"document", "policy", "fraud"}:
+        if role in {"document", "policy", "fraud"} and not rag_document:
             run_check(claim, role)
         elif role == "workflow":
             advance(claim)
